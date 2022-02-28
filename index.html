@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>JavaScript Fetch API demo</title>
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-1BmE4kWBq78iYhFldvKuhfTAU6auU8tT94WrHftjDbrCEXSU1oBoqyl2QvZ6jIW3" crossorigin="anonymous">
+	
+	<!-- EXTERNAL LIBRARIES ARE ONLY BEING USED FOR DESIGN PURPOSES (bootstrap dropdown menu) // ALL RELEVANT CODE IS WRITTEN IN VANILLA JS -->
+	<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.min.js" integrity="sha384-Atwg2Pkwv9vp0ygtn1JAojH0nYbwNJLPhwyoVbhoPwBhjQPR5VtM2+xf0Uwh9KtT" crossorigin="anonymous"></script>
+
+	<style type="text/css">
+        #results .card-title a {
+            color: black;
+            text-decoration: none;
+            font-size: 14pt;
+        }
+
+        #results > .card-body {
+            padding-bottom: 0;
+        }
+
+		#results > .card-body p {
+			font-size: 9pt;
+		}
+
+        #results {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            padding-top: 0px;
+        }
+	</style>
+</head>
+
+<body>
+
+
+
+	<div class="container mt-5" style="max-width:500px;">
+		<h3>Cloud9 Internship Task</h3>
+	</div>
+
+	<div class="container p-5 bg-light mt-5 mb-5" style="max-width:500px;">
+		<div class="row">
+			<div class="row">
+				<button onclick="fetchData()" id="fetchBtn" class="btn btn-success btn-lg btn-block">Fetch Data</button>
+			</div>
+
+			<div class="col-6 gy-3 gx-0">
+				<input type="text" class="form-control" id="search" name="search" placeholder="Enter a keyword...">
+			</div>
+
+			<div class="col-2 gy-3 gx-2">
+				<button class="btn btn-primary btn-block" onclick="searchResult.performSearch()">Search</button>
+			</div>
+
+			<div class="col-3 gy-3 gx-3">
+				<button class="btn btn-secondary btn-block" onclick="searchResult.clearSearch()" id="clear-search" disabled>Clear</button>
+			</div>
+		</div>
+	</div>
+
+	<div class="d-flex justify-content-center" id="fetch-spinner" style="visibility:hidden;">
+		<div class="spinner-border" role="status">
+			<span class="visually-hidden">Loading...</span>
+		</div>
+	</div>
+
+	<div class="container"style="max-width:750px; margin-top: -50px;">
+
+		<div class="row" id="infoBar" style="visibility: hidden">
+			<div class="row"><p id="search-results-info"></p></div>
+
+			<div class="row-1 mb-3 dropdown">
+				<button class="btn btn-secondary btn-sm dropdown-toggle" type="button" id="dropdownBtn" data-bs-toggle="dropdown" aria-expanded="false">
+					Sort Results By
+				</button>
+				<ul class="dropdown-menu" aria-labelledby="dropdownBtn">
+					<li><a class="dropdown-item" onclick="sortByTitleAsc()">Title Asc</a></li>
+					<li><a class="dropdown-item" onclick="sortByTitleDesc()">Title Desc</a></li>
+					<li><a class="dropdown-item" onclick="sortByScoreAsc()">Score Asc</a></li>
+					<li><a class="dropdown-item" onclick="sortByScoreDesc()">Score Desc</a></li>
+				</ul>
+			</div>
+			<!--<hr />-->
+		</div>
+
+		<div id="results" class="card" style="visibility:hidden;"></div>
+	</div>
+
+	<script type="text/javascript">
+
+		'use strict';
+		let searchMode = false;
+
+        document.querySelector('#search').addEventListener('keydown', function (e) {
+			if (document.querySelector('#search').value === '') return;
+			if (e.which === 13) searchResult.performSearch();
+        });
+
+        const reducedFetchResult = {
+			data: new Array(),
+
+			extract(json) {
+				this.data.length = 0;
+				Object.keys(json).forEach(item => this.data.push(new Object({
+					author:		json[item].data.author,
+					score:		json[item].data.score,
+					permalink:	json[item].data.permalink,
+					title:		json[item].data.title,
+					selftext:	json[item].data.selftext
+				})));
+            }
+        }
+		
+		const searchResult = {
+			data: new Array(),
+
+			performSearch() {
+				const searchValue = document.querySelector('#search').value.toLowerCase();
+                if (searchValue === '') {
+                    return alert('Please enter a keyword!');
+				}
+
+                this.data = reducedFetchResult.data.filter(rate => rate.title.toLowerCase().includes(searchValue) || rate.selftext.toLowerCase().includes(searchValue));
+                const resultsCount = this.data.length;
+
+                if (resultsCount <= 0) {
+                    alert('No results, please try a different keyword');
+                }
+				else {
+					searchMode = true;
+					document.querySelector('#clear-search').disabled = false;
+                    document.querySelector('#search-results-info').innerHTML = `Showing ${resultsCount} results containing keyword "${searchValue}"`;
+                    document.querySelector('#results').innerHTML = this.data.map(item => generateHTMLSegment(item)).join('');
+                }
+			},
+
+			clearSearch() {
+                searchMode = false;
+				document.querySelector('#search').value = '';
+				document.querySelector('#clear-search').disabled = true;
+				document.querySelector('#results').innerHTML = reducedFetchResult.data.map(item => generateHTMLSegment(item)).join('');
+				document.querySelector('#dropdownBtn').innerHTML = 'Sort Results By';
+                document.querySelector('#search-results-info').innerHTML = `Showing ${reducedFetchResult.data.length} fetched results`;
+            }
+        }
+
+
+
+		const fetchData = async () => {
+			document.querySelector('#fetchBtn').classList.add('disabled');
+            toggleSpinner(true);
+
+            try {
+                const response = await fetch('https://www.reddit.com/r/javascript.json');
+				const data = await response.text();
+				const json = JSON.parse(data);
+                reducedFetchResult.extract(json.data.children);
+
+            } catch (error) {
+                console.log(error);
+                toggleSpinner(false);
+			}
+
+			if (searchMode) searchResult.clearSearch();
+
+            document.querySelector('#results').innerHTML = reducedFetchResult.data.map(item => generateHTMLSegment(item)).join('');
+            document.querySelector('#search-results-info').innerHTML = `Showing ${reducedFetchResult.data.length} fetched results`;
+            document.querySelector('#infoBar').style.visibility = 'visible';
+            document.querySelector('#results').style.visibility = 'visible';
+
+			toggleSpinner(false);
+            document.querySelector('#fetchBtn').classList.remove('disabled');
+		}
+
+
+		const toggleSpinner = toggle => document.querySelector('#fetch-spinner').style.visibility = (toggle === true ? 'visible' : 'hidden');
+
+        const generateHTMLSegment = item => `<div class="card-body">
+												<h5 class="card-title"><a href="https://reddit.com${item.permalink}" target="_blank">${item.title}</a></h5>
+												<p class="card-text">${item.score} pts &#8226; Created by ${item.author}</p>
+											  </div>`
+
+
+		// Sorting related
+        const sortByTitleAsc = () => {
+            const sortingArray = searchMode ? searchResult.data : reducedFetchResult.data;
+            const sortedResults = sortingArray.sort((a, b) => a.title.localeCompare(b.title));
+            showSortedResults(sortedResults, 'Title Asc');
+        }
+
+        const sortByTitleDesc = () => {
+            const sortingArray = searchMode ? searchResult.data : reducedFetchResult.data;
+            const sortedResults = sortingArray.sort((a, b) => b.title.localeCompare(a.title));
+            showSortedResults(sortedResults, 'Title Desc');
+        }
+
+        const sortByScoreAsc = () => {
+            const sortingArray = searchMode ? searchResult.data : reducedFetchResult.data;
+            const sortedResults = sortingArray.sort((a, b) => a.score - b.score);
+            showSortedResults(sortedResults, 'Score Asc');
+        }
+
+        const sortByScoreDesc = () => {
+            const sortingArray = searchMode ? searchResult.data : reducedFetchResult.data;
+            const sortedResults = sortingArray.sort((a, b) => b.score - a.score);
+            showSortedResults(sortedResults, 'Score Desc');
+        }
+
+        const showSortedResults = (sortedResults, btnTitle) => {
+            document.querySelector('#results').innerHTML = sortedResults.map(item => generateHTMLSegment(item)).join('');
+            document.querySelector('#dropdownBtn').innerHTML = btnTitle;
+        }
+
+	</script>
+</body>
+</html>
